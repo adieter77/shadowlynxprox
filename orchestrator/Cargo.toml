@@ -29,6 +29,22 @@ uuid = { version = "1", features = ["v4"] }
 # Async traits
 async-trait = "0.1"
 
+# HTTP client for host functions
+reqwest = { version = "0.12", features = ["blocking", "rustls-tls"], default-features = false }
+
+# Random number generation
+rand = "0.8"
+
+# WASM Plugin Runtime
+wasmtime = "27"
+wasmtime-wasi = "27"
+wat = "1"
+sha2 = "0.10"
+hex = "0.4"
+rmp-serde = "1"
+serde_bytes = "0.11"
+cap-std = "3"
+
 [build-dependencies]
 tonic-build = "0.11"
 

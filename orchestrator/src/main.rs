@@ -1,44 +1,63 @@
-// Shadowlynx ProX Orchestrator — Main Entry Point
-//
-// This is the gRPC server that the CLI connects to.
-// It handles chat requests, command execution, health checks,
-// and eventually will coordinate plugins and the AI core.
+// ============================================================
+// Shadowlynx ProX — Rust Orchestrator
+// ============================================================
+// gRPC server that:
+//   1. Routes chat/execute requests to the Python AI Core
+//   2. Manages WASM plugins with sandboxed execution
+//   3. Handles health checks and service discovery
+// ============================================================
 
 mod service;
+mod plugin;
+mod plugin_service;
+
+// The original tonic-build output uses these module names.
+// We rename via the `compile_well_known_types` and use the proto file basenames.
+pub mod orchestrator_proto {
+    tonic::include_proto!("orchestrator");
+}
+
+pub mod ai_core_proto {
+    tonic::include_proto!("ai_core");
+}
+
+pub mod plugin_proto {
+    tonic::include_proto!("plugin");
+}
 
 use tonic::transport::Server;
-use tracing_subscriber::{fmt, EnvFilter};
+use std::sync::Arc;
+use crate::plugin::runtime::PluginRuntime;
+use crate::plugin_service::PluginServiceImpl;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize logging
-    fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .init();
+    let addr = "[::]:50052".parse()?;
+    let ai_core_addr = "http://127.0.0.1:50051".to_string();
 
-    tracing::info!("Shadowlynx ProX Orchestrator starting...");
+    // Initialize the WASM plugin runtime
+    let plugin_runtime = Arc::new(PluginRuntime::new());
 
-    // Our gRPC service
-    let orchestrator = service::OrchestratorService::new();
+    let orchestrator_service = service::OrchestratorService::new(ai_core_addr);
+    let plugin_service = PluginServiceImpl::new(plugin_runtime);
 
-    // Start the gRPC server
-    let addr = "0.0.0.0:50052".parse()?;
-    tracing::info!("gRPC server listening on {}", addr);
+    println!("========================================");
+    println!(" Shadowlynx ProX — Orchestrator");
+    println!("========================================");
+    println!(" gRPC Server:  0.0.0.0:50052");
+    println!(" AI Core:      http://127.0.0.1:50051");
+    println!(" Plugins:      WASM runtime (wasmtime)");
+    println!("========================================");
+
+    // Build the server with both services
+    let orchestrator_svc = orchestrator_proto::orchestrator_server::OrchestratorServer::new(orchestrator_service);
+    let plugin_svc = plugin_proto::plugin_service_server::PluginServiceServer::new(plugin_service);
 
     Server::builder()
-        .add_service(
-            // The generated OrchestratorServer from proto
-            orchestrator_proto::orchestrator_server::OrchestratorServer::new(orchestrator),
-        )
+        .add_service(orchestrator_svc)
+        .add_service(plugin_svc)
         .serve(addr)
         .await?;
 
     Ok(())
-}
-
-// Include the generated protobuf code
-mod orchestrator_proto {
-    tonic::include_proto!("orchestrator");
 }

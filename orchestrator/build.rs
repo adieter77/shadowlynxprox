@@ -1,9 +1,18 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let proto_files = &[
+        "proto/orchestrator.proto",
+        "proto/ai_core.proto",
+        "proto/plugin.proto",
+    ];
+    let include_dirs = &["proto"];
+
     tonic_build::configure()
         .build_server(true)
-        .build_client(false)
-        .compile(&["../proto/orchestrator.proto"], &["../proto"])?;
+        .build_client(true)
+        .compile(proto_files, include_dirs)?;
 
-    println!("cargo:rerun-if-changed=../proto/orchestrator.proto");
+    for file in proto_files {
+        println!("cargo:rerun-if-changed={}", file);
+    }
     Ok(())
 }

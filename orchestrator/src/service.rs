@@ -1,136 +1,191 @@
-// OrchestratorService — implements the gRPC Orchestrator trait
-//
-// This handles incoming requests from the CLI and coordinates
-// with the AI core and plugins.
-
 use std::pin::Pin;
 use std::time::Instant;
+use std::collections::HashMap;
 
 use async_trait::async_trait;
-use futures_core::Stream;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::{Request, Response, Status};
-use tracing::info;
+use tonic::{Request, Response, Status, Streaming};
+use tracing::{info, debug, warn, error};
 
 use crate::orchestrator_proto::{
-    orchestrator_server::Orchestrator, ChatRequest, ChatResponse, ExecuteRequest, ExecuteResponse,
-    GetInfoRequest, GetInfoResponse, HealthCheckRequest, HealthCheckResponse, TokenUsage,
+    orchestrator_server::Orchestrator,
+    ChatRequest, ChatResponse,
+    ExecuteRequest, ExecuteResponse,
+    HealthCheckRequest, HealthCheckResponse,
+    GetInfoRequest, GetInfoResponse,
+    TokenUsage, Finding,
+};
+
+use crate::ai_core_proto::{
+    ai_core_client::AiCoreClient,
+    ChatCompletionRequest, ChatMessage,
 };
 
 /// The main orchestrator service
-#[derive(Debug)]
 pub struct OrchestratorService {
     start_time: Instant,
+    ai_core_addr: String,
 }
 
 impl OrchestratorService {
-    pub fn new() -> Self {
+    pub fn new(ai_core_addr: String) -> Self {
         Self {
             start_time: Instant::now(),
+            ai_core_addr,
         }
     }
 
-    /// Process a single chat message and return a response
-    /// This will eventually call out to the Python AI core
-    async fn process_chat(&self, request: &ChatRequest) -> Result<String, String> {
-        let message = &request.message;
+    pub fn with_default() -> Self {
+        Self::new("http://127.0.0.1:50051".to_string())
+    }
 
-        // For now, we handle basic commands locally
-        // Later this will route to the appropriate AI model
-        let response = match message.to_lowercase().as_str() {
+    /// Process a chat message by calling the Python AI Core
+    async fn process_chat_with_ai(
+        &self,
+        request: &ChatRequest,
+    ) -> Result<Vec<ChatResponse>, String> {
+        // Connect to AI Core
+        let mut client = AiCoreClient::connect(self.ai_core_addr.clone())
+            .await
+            .map_err(|e| format!("Failed to connect to AI Core: {}", e))?;
+        
+        // Build the request
+        let ai_request = ChatCompletionRequest {
+            messages: vec![
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: request.message.clone(),
+                }
+            ],
+            system_prompt: String::new(),
+            model: if request.model.is_empty() { String::new() } else { request.model.clone() },
+            provider: String::new(), // Use default
+            max_tokens: 4096,
+            temperature: 0.7,
+            conversation_id: if request.conversation_id.is_empty() {
+                uuid::Uuid::new_v4().to_string()
+            } else {
+                request.conversation_id.clone()
+            },
+        };
+        
+        let conv_id = ai_request.conversation_id.clone();
+        
+        // Stream from AI Core
+        let mut stream = client
+            .chat_completion(ai_request)
+            .await
+            .map_err(|e| format!("AI Core call failed: {}", e))?
+            .into_inner();
+        
+        let mut responses = Vec::new();
+        let mut accumulated = String::new();
+        let mut first = true;
+        
+        while let Some(chunk) = stream.message().await
+            .map_err(|e| format!("Stream error: {}", e))?
+        {
+            if !chunk.error.is_empty() {
+                // If there's an error but we have accumulated text, use that
+                if !accumulated.is_empty() {
+                    break;
+                }
+                return Err(chunk.error);
+            }
+            
+            accumulated.push_str(&chunk.text_chunk);
+            
+            let response = ChatResponse {
+                text_chunk: chunk.text_chunk.clone(),
+                is_final: chunk.is_final,
+                conversation_id: if first {
+                    first = false;
+                    conv_id.clone()
+                } else {
+                    String::new()
+                },
+                token_usage: if chunk.is_final {
+                    Some(TokenUsage {
+                        input_tokens: chunk.input_tokens as i64,
+                        output_tokens: chunk.output_tokens as i64,
+                        cost_usd: 0.0,
+                    })
+                } else {
+                    None
+                },
+                tool_calls: vec![],
+                error: String::new(),
+            };
+            
+            responses.push(response);
+            
+            if chunk.is_final {
+                break;
+            }
+        }
+        
+        Ok(responses)
+    }
+    
+    /// Fallback: process locally when AI Core is unavailable
+    fn process_chat_local(&self, request: &ChatRequest) -> Vec<ChatResponse> {
+        let message = &request.message;
+        let response_text = match message.to_lowercase().as_str() {
             m if m.contains("hello") || m.contains("hi") => {
                 format!(
-                    "Shadowlynx ProX is online and ready.\n\n\
-                    Orchestrator v{}\n\
-                    Conversation ID: {}\n\n\
-                    What would you like me to do?",
-                    env!("CARGO_PKG_VERSION"),
+                    "Shadowlynx ProX is online.\n\n🟡 AI Core not connected.\n\nSet up the Python AI Core for full capabilities:\n1. cd ai-core && source .venv/bin/activate\n2. python -m src.main\n\nThen restart the orchestrator.\n\nConversation ID: {}\n\nWhat would you like me to do?",
                     request.conversation_id,
                 )
             }
             m if m.contains("version") => {
                 format!(
-                    "Shadowlynx ProX v{}\n\n\
-                    Components:\n\
-                    - CLI: Go 1.22+\n\
-                    - Orchestrator: Rust {}\n\
-                    - AI Core: Python (coming soon)\n\
-                    \n\
-                    Build: development",
+                    "Shadowlynx ProX v{}\n\nComponents:\n- CLI: Go\n- Orchestrator: Rust v{}\n- AI Core: Python (checking...)\n\nBuild: development",
                     env!("CARGO_PKG_VERSION"),
                     env!("CARGO_PKG_VERSION"),
                 )
             }
-            m if m.contains("scan") => {
-                format!(
-                    "[PLACEHOLDER] Scan request received.\n\n\
-                    The security scanning plugin will handle this.\n\
-                    Target: {}\n\
-                    \n\
-                    This feature is being built. Currently available:\n\
-                    - Port scanning (SYN, connect, UDP)\n\
-                    - Service fingerprinting\n\
-                    - Web fuzzing\n\
-                    \n\
-                    Full plugin integration coming in Phase 3.",
-                    request.message
-                )
-            }
-            m if m.contains("payload") || m.contains("exploit") => {
-                "[PLACEHOLDER] Payload generation request received.\n\n\
-                    The offensive security plugin will generate:\n\
-                    - Reverse shells (Python, Bash, PowerShell, Go, Rust)\n\
-                    - Staged and stageless payloads\n\
-                    - Custom shellcode\n\n\
-                    Full integration coming in Phase 3."
-                    .to_string()
-            }
-            m if m.contains("help") => "Shadowlynx ProX capabilities:\n\n\
-                1. Security Operations\n\
-                   - Port scanning & service enumeration\n\
-                   - Vulnerability assessment\n\
-                   - Exploit generation & execution\n\
-                   - Payload crafting\n\n\
-                2. Software Engineering\n\
-                   - Multi-language code generation\n\
-                   - Code review & refactoring\n\
-                   - CI/CD pipeline generation\n\n\
-                3. Blockchain\n\
-                   - Smart contract auditing\n\
-                   - Wallet management\n\
-                   - On-chain analysis\n\n\
-                4. General\n\
-                   - Natural language understanding\n\
-                   - File & code analysis\n\
-                   - Research & documentation\n\n\
-                Type any request and I'll handle it."
-                .to_string(),
             _ => {
                 format!(
-                    "I received: \"{}\"\n\n\
-                    [Note: The AI reasoning core is not connected yet.\n\
-                    Full natural language responses with AI will be available\n\
-                    once the Python AI core integration is complete.\n\
-                    This is the Rust orchestrator responding directly.]\n\n\
-                    In the meantime, try these commands:\n\
-                    - 'help' for capabilities\n\
-                    - 'version' for version info\n\
-                    - 'scan ...' for security operations\n\
-                    - 'payload ...' for exploit generation",
-                    request.message
+                    "🟡 AI Core not connected.\n\nReceived: \"{}\"\n\nTo enable full AI capabilities:\n1. cd ai-core && source .venv/bin/activate\n2. Configure an LLM provider in .env\n3. python -m src.main\n4. Restart the orchestrator",
+                    message
                 )
             }
         };
-
-        Ok(response)
+        
+        let words: Vec<&str> = response_text.split(' ').collect();
+        let mut responses = Vec::new();
+        let cid = request.conversation_id.clone();
+        
+        for (i, chunk) in words.chunks(3).enumerate() {
+            let text = chunk.join(" ") + " ";
+            let is_last = (i + 1) * 3 >= words.len();
+            
+            responses.push(ChatResponse {
+                text_chunk: text,
+                is_final: is_last,
+                conversation_id: if i == 0 { cid.clone() } else { String::new() },
+                token_usage: if is_last {
+                    Some(TokenUsage {
+                        input_tokens: 10,
+                        output_tokens: words.len() as i64,
+                        cost_usd: 0.0,
+                    })
+                } else {
+                    None
+                },
+                tool_calls: vec![],
+                error: String::new(),
+            });
+        }
+        
+        responses
     }
 }
 
 #[async_trait]
 impl Orchestrator for OrchestratorService {
-    /// Streaming chat — the AI responds token by token
-    type ChatStream = Pin<Box<dyn Stream<Item = Result<ChatResponse, Status>> + Send>>;
+    type ChatStream = Pin<Box<dyn tokio_stream::Stream<Item = Result<ChatResponse, Status>> + Send>>;
 
     async fn chat(
         &self,
@@ -149,59 +204,36 @@ impl Orchestrator for OrchestratorService {
             "Chat request received"
         );
 
-        // Process the message
-        let response_text = self
-            .process_chat(&req)
-            .await
-            .unwrap_or_else(|e| format!("Error: {}", e));
-
-        // Create a channel to simulate streaming
-        let (tx, rx) = mpsc::channel(4);
-        let cid = conversation_id.clone();
+        let (tx, rx) = mpsc::channel(16);
+        let service = OrchestratorService {
+            start_time: self.start_time,
+            ai_core_addr: self.ai_core_addr.clone(),
+        };
+        let req_clone = req.clone();
 
         tokio::spawn(async move {
-            // Split the response into chunks to simulate streaming
-            // In production, these would come from the LLM token by token
-            let words: Vec<&str> = response_text.split(' ').collect();
-            let chunk_size = 3; // Send 3 words at a time
-            let total_words = words.len();
+            // Try AI Core first, fall back to local processing
+            let responses = match service.process_chat_with_ai(&req_clone).await {
+                Ok(responses) => responses,
+                Err(e) => {
+                    warn!("AI Core failed: {}. Falling back to local processing.", e);
+                    service.process_chat_local(&req_clone)
+                }
+            };
 
-            for (i, chunk) in words.chunks(chunk_size).enumerate() {
-                let text = chunk.join(" ") + " ";
-                let is_last = (i + 1) * chunk_size >= total_words;
-
-                let response = ChatResponse {
-                    text_chunk: text,
-                    is_final: is_last,
-                    conversation_id: if i == 0 { cid.clone() } else { String::new() },
-                    token_usage: if is_last {
-                        Some(TokenUsage {
-                            input_tokens: 10,
-                            output_tokens: total_words as i64,
-                            cost_usd: 0.0,
-                        })
-                    } else {
-                        None
-                    },
-                    tool_calls: vec![],
-                    error: String::new(),
-                };
-
+            for response in responses {
                 if tx.send(Ok(response)).await.is_err() {
                     break; // Client disconnected
                 }
-
-                // Small delay to simulate streaming
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                // Small delay for streaming effect
+                tokio::time::sleep(std::time::Duration::from_millis(30)).await;
             }
         });
 
-        // Convert mpsc receiver to a stream
         let stream = ReceiverStream::new(rx);
         Ok(Response::new(Box::pin(stream)))
     }
 
-    /// One-shot execution
     async fn execute(
         &self,
         request: Request<ExecuteRequest>,
@@ -215,22 +247,38 @@ impl Orchestrator for OrchestratorService {
             "Execute request received"
         );
 
-        // Process the command (same logic as chat for now)
+        // Build a chat request from the execute request
         let chat_req = ChatRequest {
             conversation_id: String::new(),
             message: req.prompt.clone(),
             workspace_path: req.workspace_path,
+            model: req.model,
             ..Default::default()
         };
 
-        let result = self
-            .process_chat(&chat_req)
-            .await
-            .unwrap_or_else(|e| format!("Error: {}", e));
+        // Process via AI Core
+        let result = match self.process_chat_with_ai(&chat_req).await {
+            Ok(responses) => {
+                let mut text = String::new();
+                for r in &responses {
+                    text.push_str(&r.text_chunk);
+                }
+                text
+            }
+            Err(e) => {
+                warn!("AI Core failed for execute: {}. Using local.", e);
+                let local = self.process_chat_local(&chat_req);
+                let mut text = String::new();
+                for r in &local {
+                    text.push_str(&r.text_chunk);
+                }
+                text
+            }
+        };
 
         let execution_time_ms = start.elapsed().as_millis() as i64;
 
-        let response = ExecuteResponse {
+        Ok(Response::new(ExecuteResponse {
             result,
             findings: vec![],
             token_usage: Some(TokenUsage {
@@ -241,22 +289,37 @@ impl Orchestrator for OrchestratorService {
             execution_time_ms,
             error: String::new(),
             success: true,
-        };
-
-        Ok(Response::new(response))
+        }))
     }
 
-    /// Health check
     async fn health_check(
         &self,
         _request: Request<HealthCheckRequest>,
     ) -> Result<Response<HealthCheckResponse>, Status> {
         let uptime = self.start_time.elapsed().as_secs() as i64;
-
-        let mut checks = std::collections::HashMap::new();
+        let mut checks = HashMap::new();
         checks.insert("orchestrator".to_string(), "ok".to_string());
         checks.insert("gRPC".to_string(), "serving".to_string());
-
+        
+        // Check AI Core availability
+        match AiCoreClient::connect(self.ai_core_addr.clone()).await {
+            Ok(mut client) => {
+                let health_req = crate::ai_core_proto::HealthRequest {};
+                match client.health(health_req).await {
+                    Ok(resp) => {
+                        let h = resp.into_inner();
+                        checks.insert("ai_core".to_string(), h.status);
+                    }
+                    Err(_) => {
+                        checks.insert("ai_core".to_string(), "unreachable".to_string());
+                    }
+                }
+            }
+            Err(_) => {
+                checks.insert("ai_core".to_string(), "unreachable".to_string());
+            }
+        }
+        
         Ok(Response::new(HealthCheckResponse {
             healthy: true,
             status: "serving".to_string(),
@@ -265,7 +328,6 @@ impl Orchestrator for OrchestratorService {
         }))
     }
 
-    /// Get orchestrator info
     async fn get_info(
         &self,
         _request: Request<GetInfoRequest>,
@@ -277,8 +339,8 @@ impl Orchestrator for OrchestratorService {
             available_models: vec![
                 "claude-sonnet-4".to_string(),
                 "gpt-5".to_string(),
-                "deepseek-v4".to_string(),
-                "ollama:llama3".to_string(),
+                "deepseek-chat".to_string(),
+                "ollama:llama3.1".to_string(),
             ],
             available_plugins: vec![
                 "port_scanner".to_string(),
