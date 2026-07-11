@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/shadowlynx/prox-cli/pkg/grpc/orchestrator"
 	grpcclient "github.com/shadowlynx/prox-cli/pkg/grpc"
+	pb "github.com/shadowlynx/prox-cli/pkg/grpc/proto"
 	"github.com/spf13/cobra"
 )
 

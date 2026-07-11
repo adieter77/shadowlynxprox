@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	pb "github.com/shadowlynx/prox-cli/pkg/grpc/orchestrator"
+	pb "github.com/shadowlynx/prox-cli/pkg/grpc/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

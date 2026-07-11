@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             v3.21.12
-// source: proto/orchestrator.proto
+// source: orchestrator.proto
 
-package orchestrator
+package proto
 
 import (
 	context "context"
@@ -243,5 +243,5 @@ var Orchestrator_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "proto/orchestrator.proto",
+	Metadata: "orchestrator.proto",
 }
