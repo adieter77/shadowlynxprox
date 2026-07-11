@@ -1,0 +1,188 @@
+syntax = "proto3";
+
+package orchestrator;
+
+// Go package path and Rust package name
+option go_package = "github.com/shadowlynx/prox-cli/pkg/grpc/orchestrator";
+option java_package = "com.shadowlynx.prox.orchestrator";
+
+// ================================================================
+// Orchestrator Service — the main API between CLI and backend
+// ================================================================
+
+service Orchestrator {
+    // Send a chat message and get a response (streaming)
+    rpc Chat (ChatRequest) returns (stream ChatResponse);
+    
+    // Execute a single command (non-streaming)
+    rpc Execute (ExecuteRequest) returns (ExecuteResponse);
+    
+    // Check if the orchestrator is healthy
+    rpc HealthCheck (HealthCheckRequest) returns (HealthCheckResponse);
+    
+    // Get version and capabilities
+    rpc GetInfo (GetInfoRequest) returns (GetInfoResponse);
+}
+
+// ================================================================
+// Chat Messages
+// ================================================================
+
+message ChatRequest {
+    // Unique ID for this conversation (empty means start new)
+    string conversation_id = 1;
+    
+    // The user's message
+    string message = 2;
+    
+    // Optional: workspace path for context
+    string workspace_path = 3;
+    
+    // Optional: system prompt override
+    string system_prompt = 4;
+    
+    // Model to use (empty = default)
+    string model = 5;
+    
+    // Additional context as key-value pairs
+    map<string, string> context = 6;
+}
+
+message ChatResponse {
+    // Chunk of the response (streamed token by token or sentence by sentence)
+    string text_chunk = 1;
+    
+    // True if this is the last message in the stream
+    bool is_final = 2;
+    
+    // Conversation ID (returned after first message)
+    string conversation_id = 3;
+    
+    // Token usage stats (only in final message)
+    TokenUsage token_usage = 4;
+    
+    // Any tool calls the AI wants to make
+    repeated ToolCall tool_calls = 5;
+    
+    // Error information if something went wrong
+    string error = 6;
+}
+
+// ================================================================
+// Execute (One-Shot Command)
+// ================================================================
+
+message ExecuteRequest {
+    // The full prompt/command to execute
+    string prompt = 1;
+    
+    // Type of execution
+    ExecutionType execution_type = 2;
+    
+    // Optional target (URL, file path, IP, etc.)
+    string target = 3;
+    
+    // Optional: workspace path
+    string workspace_path = 4;
+    
+    // Optional: file contents to analyze
+    bytes file_data = 5;
+    
+    // Optional: file name for context
+    string file_name = 6;
+    
+    // Model override
+    string model = 7;
+}
+
+enum ExecutionType {
+    EXECUTION_TYPE_UNSPECIFIED = 0;
+    EXECUTION_TYPE_CHAT = 1;           // General conversation
+    EXECUTION_TYPE_SCAN = 2;           // Security scan
+    EXECUTION_TYPE_EXPLOIT = 3;        // Exploitation
+    EXECUTION_TYPE_BUILD = 4;          // Software engineering
+    EXECUTION_TYPE_AUDIT = 5;          // Smart contract audit
+    EXECUTION_TYPE_ANALYZE = 6;        // Code/binary analysis
+    EXECUTION_TYPE_GENERATE = 7;       // Payload/code generation
+}
+
+message ExecuteResponse {
+    // The full response text
+    string result = 1;
+    
+    // Any findings discovered
+    repeated Finding findings = 2;
+    
+    // Token usage
+    TokenUsage token_usage = 3;
+    
+    // Execution time in milliseconds
+    int64 execution_time_ms = 4;
+    
+    // Error if something went wrong
+    string error = 5;
+    
+    // Whether the execution was successful
+    bool success = 6;
+}
+
+// ================================================================
+// Shared Types
+// ================================================================
+
+message TokenUsage {
+    int64 input_tokens = 1;
+    int64 output_tokens = 2;
+    double cost_usd = 3;
+}
+
+message ToolCall {
+    string id = 1;
+    string tool_name = 2;
+    string parameters_json = 3;
+}
+
+message Finding {
+    string id = 1;
+    FindingSeverity severity = 2;
+    string title = 3;
+    string description = 4;
+    string target = 5;
+    string evidence = 6;
+    double cvss_score = 7;
+    string remediation = 8;
+    repeated string references = 9;
+}
+
+enum FindingSeverity {
+    FINDING_SEVERITY_UNSPECIFIED = 0;
+    FINDING_SEVERITY_CRITICAL = 1;
+    FINDING_SEVERITY_HIGH = 2;
+    FINDING_SEVERITY_MEDIUM = 3;
+    FINDING_SEVERITY_LOW = 4;
+    FINDING_SEVERITY_INFO = 5;
+}
+
+// ================================================================
+// Health Check & Info
+// ================================================================
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+    bool healthy = 1;
+    string status = 2;           // "serving", "not_serving", "degraded"
+    int64 uptime_seconds = 3;
+    map<string, string> checks = 4;  // Component-specific health
+}
+
+message GetInfoRequest {}
+
+message GetInfoResponse {
+    string version = 1;
+    string build_commit = 2;
+    string build_date = 3;
+    repeated string available_models = 4;
+    repeated string available_plugins = 5;
+    int32 max_context_tokens = 6;
+}
