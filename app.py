@@ -9,9 +9,11 @@ def chat():
     data = request.json
     user_msg = data.get("message", "")
 
-    # Simple placeholder AI logic (replace with real AI later)
+    # Simple AI placeholder logic
     if user_msg.strip().lower() == "hello":
         ai_reply = "Hi there! How can I help you today?"
+    elif "weather" in user_msg.lower():
+        ai_reply = "I can't fetch live weather yet, but imagine it's sunny!"
     else:
         ai_reply = f"I received your message: {user_msg}"
 
