@@ -239,7 +239,7 @@ var pluginValidateCmd = &cobra.Command{
 
 func getPluginClient() (pb.PluginServiceClient, *grpc.ClientConn, error) {
 	conn, err := grpc.NewClient(
-		"localhost:50052",
+		orchestratorAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {

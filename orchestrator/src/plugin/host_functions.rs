@@ -2,16 +2,30 @@
 // Host Functions — What Plugins Can Call
 // ============================================================
 
+use once_cell::sync::Lazy;
 use wasmtime::*;
 
 use super::manifest::CapabilityLevel;
 use super::sandbox::SandboxConfig;
 
+// Global, process-lifetime HTTP client.
+// We use a Lazy static (not a per-Store client) because
+// `reqwest::blocking::Client` lazily builds an internal tokio
+// runtime on first use; if that runtime gets dropped from within
+// an async context it panics. By keeping the client in a static
+// we ensure the runtime lives for the entire program.
+static HTTP_CLIENT: Lazy<reqwest::blocking::Client> = Lazy::new(|| {
+    reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .user_agent("Shadowlynx-ProX-Plugin/1.0")
+        .build()
+        .unwrap_or_default()
+});
+
 pub struct HostState {
     pub sandbox_config: SandboxConfig,
     pub plugin_id: String,
     pub capabilities: std::collections::HashMap<String, CapabilityLevel>,
-    pub http_client: reqwest::blocking::Client,
 }
 
 impl HostState {
@@ -24,10 +38,6 @@ impl HostState {
             sandbox_config: sandbox_config.clone(),
             plugin_id: plugin_id.to_string(),
             capabilities: capabilities.into_iter().collect(),
-            http_client: reqwest::blocking::Client::builder()
-                .timeout(std::time::Duration::from_secs(10))
-                .build()
-                .unwrap_or_default(),
         }
     }
 
@@ -145,8 +155,7 @@ pub fn register_host_functions(
             let data = mem.data(&caller);
             let url_bytes = &data[url_ptr as usize..(url_ptr + url_len) as usize];
             let url = String::from_utf8_lossy(url_bytes).to_string();
-            let client = caller.data().http_client.clone();
-            match client.get(&url).send() {
+            match HTTP_CLIENT.get(&url).send() {
                 Ok(resp) => {
                     match resp.text() {
                         Ok(body) => {
@@ -191,3 +200,4 @@ pub fn register_host_functions(
 
     Ok(())
 }
+

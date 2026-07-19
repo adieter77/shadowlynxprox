@@ -224,7 +224,7 @@ impl PluginRuntime {
             &mut call_results,
         );
 
-        let result_json = match call_result {
+        let (result_json, success) = match call_result {
             Ok(()) => {
                 let packed = match call_results[0] {
                     Val::I64(v) => v,
@@ -241,20 +241,19 @@ impl PluginRuntime {
                     let s = result_ptr as usize;
                     let e = s + result_len as usize;
                     if e <= data.len() {
-                        String::from_utf8_lossy(&data[s..e]).to_string()
+                        (String::from_utf8_lossy(&data[s..e]).to_string(), true)
                     } else {
-                        format!(r#"{{"error":"invalid memory range"}}"#)
+                        (format!(r#"{{"error":"invalid memory range"}}"#), false)
                     }
                 } else {
-                    format!(r#"{{"return_code":{}}}"#, packed)
+                    (format!(r#"{{"return_code":{}}}"#, packed), true)
                 }
             }
-            Err(e) => format!(r#"{{"error":"{}"}}"#, e.to_string().replace('"', "'")),
+            Err(e) => (format!(r#"{{"error":"{}"}}"#, e.to_string().replace('"', "'")), false),
         };
 
         let duration_ms = start.elapsed().as_millis() as u64;
         let fuel_consumed = sandbox.fuel_budget.saturating_sub(store.get_fuel().unwrap_or(0));
-        let success = !result_json.contains(r#""error""#);
 
         Ok(ToolExecutionResult {
             success,
@@ -300,3 +299,4 @@ impl PluginRuntime {
         Ok((manifest, tools))
     }
 }
+

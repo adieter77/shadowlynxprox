@@ -32,7 +32,7 @@ use crate::plugin_service::PluginServiceImpl;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "[::]:50052".parse()?;
+    let addr = "[::]:50053".parse()?;
     let ai_core_addr = "http://127.0.0.1:50051".to_string();
 
     // Initialize the WASM plugin runtime
@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("========================================");
     println!(" Shadowlynx ProX — Orchestrator");
     println!("========================================");
-    println!(" gRPC Server:  0.0.0.0:50052");
+    println!(" gRPC Server:  0.0.0.0:50053");
     println!(" AI Core:      http://127.0.0.1:50051");
     println!(" Plugins:      WASM runtime (wasmtime)");
     println!("========================================");

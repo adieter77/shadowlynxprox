@@ -1,0 +1,16 @@
+{
+    "id": "offensive-security",
+    "name": "Offensive Security Toolkit",
+    "version": "1.0.0",
+    "description": "Port scanning, HTTP probing, and subnet enumeration",
+    "author": "Shadowlynx ProX",
+    "capabilities": [
+        {"name": "network:outbound", "level": "full", "scope": "0.0.0.0/0:1-65535", "reason": "Port scanning requires outbound TCP"},
+        {"name": "fs:read", "level": "none", "scope": "", "reason": ""},
+        {"name": "fs:write", "level": "none", "scope": "", "reason": ""},
+        {"name": "exec:shell", "level": "none", "scope": "", "reason": ""}
+    ],
+    "fuel_budget": 200000000,
+    "timeout_ms": 120000,
+    "memory_mb": 128
+}
