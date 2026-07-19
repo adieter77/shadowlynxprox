@@ -7,7 +7,7 @@ app = Flask(__name__)
 CORS(app, origins=["https://adieter77.github.io"])
 
 # Load Venice Uncensored 1.2 model
-MODEL_NAME = "VeniceAI/Venice-Uncensored-1.2"  # adjust if repo name differs
+MODEL_NAME = "gpt2"  # adjust if repo name differs
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_NAME,
