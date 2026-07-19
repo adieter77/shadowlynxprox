@@ -1,8 +1,15 @@
 # Stage 1: Build
-FROM rustlang/rust:nightly as builder
+FROM rust:latest as builder
 WORKDIR /app
 COPY . .
+
+# Install protoc for gRPC/protobuf builds
 RUN apt-get update && apt-get install -y protobuf-compiler
+
+# Install nightly toolchain automatically
+RUN rustup install nightly && rustup default nightly
+
+# Build orchestrator and gateway
 RUN cd orchestrator && cargo build --release
 RUN cd gateway && cargo build --release
 
