@@ -15,11 +15,13 @@
     #input { flex: 1; padding: 0.7em; border: 1px solid #ccc; border-radius: 20px; }
     #send { margin-left: 0.5em; padding: 0.7em 1.2em; border: none; background: #4caf50; color: #fff; border-radius: 20px; cursor: pointer; }
     #send:hover { background: #45a049; }
+    #typing { font-style: italic; color: #555; margin: 0.5em; }
   </style>
 </head>
 <body>
   <header><h1>Shadowlynx ProX Chat</h1></header>
   <div id="chatbox"></div>
+  <div id="typing" style="display:none;">Bot is typing...</div>
   <div id="input-area">
     <input id="input" type="text" placeholder="Type your message...">
     <button id="send">Send</button>
@@ -29,6 +31,7 @@
     const chatbox = document.getElementById('chatbox');
     const input = document.getElementById('input');
     const sendBtn = document.getElementById('send');
+    const typingIndicator = document.getElementById('typing');
 
     function addMessage(text, cls) {
       const wrapper = document.createElement('div');
@@ -51,6 +54,8 @@
       addMessage(msg, "user");
       input.value = "";
 
+      typingIndicator.style.display = "block";
+
       try {
         const res = await fetch("https://shadowlynxprox-1.onrender.com/chat", {
           method: "POST",
@@ -58,8 +63,10 @@
           body: JSON.stringify({ message: msg })
         });
         const data = await res.json();
+        typingIndicator.style.display = "none";
         addMessage(data.reply || JSON.stringify(data), "bot");
       } catch (err) {
+        typingIndicator.style.display = "none";
         addMessage("Error: " + err.message, "bot");
       }
     }
