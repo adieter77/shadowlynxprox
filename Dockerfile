@@ -2,8 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies for Venice Uncensored
-RUN pip install flask flask-cors gunicorn transformers accelerate torch
+# Only install lightweight dependencies
+RUN pip install flask flask-cors gunicorn requests
 
 COPY app.py .
 

@@ -1,29 +1,24 @@
+import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from transformers import AutoTokenizer, AutoModelForCausalLM
-import torch
 
 app = Flask(__name__)
 CORS(app, origins=["https://adieter77.github.io"])
 
-# Load Venice Uncensored 1.2 model
-MODEL_NAME = "gpt2"  # adjust if repo name differs
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_NAME,
-    torch_dtype=torch.float16,
-    device_map="auto"
-)
+# Point to your Jan.ai API endpoint (adjust host/port if needed)
+JANAI_URL = "http://localhost:1337/api/chat"
 
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.json
     user_msg = data.get("message", "")
 
-    # Encode input and generate reply
-    inputs = tokenizer(user_msg, return_tensors="pt").to(model.device)
-    outputs = model.generate(**inputs, max_length=200)
-    ai_reply = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    try:
+        # Forward request to Jan.ai
+        response = requests.post(JANAI_URL, json={"prompt": user_msg})
+        ai_reply = response.json().get("reply", "No reply from Jan.ai")
+    except Exception as e:
+        ai_reply = f"Error contacting Jan.ai: {str(e)}"
 
     return jsonify({"reply": ai_reply})
 
