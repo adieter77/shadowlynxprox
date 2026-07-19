@@ -1,22 +1,11 @@
-# Stage 1: Build
-FROM rust:latest as builder
+FROM python:3.11-slim
+
 WORKDIR /app
-COPY . .
 
-# Install protoc for gRPC/protobuf builds
-RUN apt-get update && apt-get install -y protobuf-compiler
+# Install dependencies
+RUN pip install flask flask-cors gunicorn
 
-# Install nightly toolchain automatically
-RUN rustup install nightly && rustup default nightly
+COPY app.py .
 
-# Build orchestrator and gateway
-RUN cd orchestrator && cargo build --release
-RUN cd gateway && cargo build --release
-
-# Stage 2: Runtime
-FROM debian:bookworm-slim
-WORKDIR /app
-COPY --from=builder /app/orchestrator/target/release/orchestrator /usr/local/bin/orchestrator
-COPY --from=builder /app/gateway/target/release/gateway /usr/local/bin/gateway
-EXPOSE 50053 8080
-CMD ["gateway"]
+# Run with Gunicorn for production
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "app:app"]
