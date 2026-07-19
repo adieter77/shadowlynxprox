@@ -5,8 +5,7 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app, origins=["https://adieter77.github.io"])
 
-# Point to your Jan.ai API endpoint (adjust host/port if needed)
-JANAI_URL = "http://localhost:1337/api/chat"
+JANAI_URL = "https://abcd1234.ngrok.io/api/chat"
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -14,7 +13,6 @@ def chat():
     user_msg = data.get("message", "")
 
     try:
-        # Forward request to Jan.ai
         response = requests.post(JANAI_URL, json={"prompt": user_msg})
         ai_reply = response.json().get("reply", "No reply from Jan.ai")
     except Exception as e:
