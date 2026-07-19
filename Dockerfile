@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install dependencies
-RUN pip install flask flask-cors gunicorn requests
+RUN pip install flask flask-cors gunicorn
 
 COPY app.py .
 
