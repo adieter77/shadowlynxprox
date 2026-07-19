@@ -2,8 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies with pinned OpenAI version
-RUN pip install flask flask-cors gunicorn openai==0.28
+# Install dependencies for local models
+RUN pip install flask flask-cors gunicorn transformers accelerate torch
 
 COPY app.py .
 
