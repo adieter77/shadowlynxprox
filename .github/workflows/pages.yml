@@ -14,4 +14,5 @@ jobs:
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .   # adjust if your index.html is in a subfolder
+          publish_dir: .   # change to ./frontend if your index.html is inside a folder
+          publish_branch: gh-pages
