@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies for local models
+# Install dependencies for Venice Uncensored
 RUN pip install flask flask-cors gunicorn transformers accelerate torch
 
 COPY app.py .
