@@ -5,7 +5,9 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app, origins=["https://adieter77.github.io"])
 
-JANAI_URL = "https://abcd1234.ngrok.io/api/chat"
+# Use your ngrok endpoint here
+JANAI_URL = "https://ether-rimless-cabbage.ngrok-free.dev/completion"  
+# ⚠️ If Jan.ai uses a different endpoint (like /generate or /chat), replace "/completion" accordingly.
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -13,6 +15,7 @@ def chat():
     user_msg = data.get("message", "")
 
     try:
+        # Forward request to Jan.ai
         response = requests.post(JANAI_URL, json={"prompt": user_msg})
         ai_reply = response.json().get("reply", "No reply from Jan.ai")
     except Exception as e:
