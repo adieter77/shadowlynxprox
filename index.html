@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Shadowlynx ProX Chat</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; background: #111; color: #eee; }
+    #chatbox { border: 1px solid #444; padding: 1em; height: 300px; overflow-y: auto; background: #222; }
+    .user { color: #4caf50; margin: 0.5em 0; }
+    .bot { color: #03a9f4; margin: 0.5em 0; }
+    #input { width: 80%; padding: 0.5em; }
+    #send { padding: 0.5em; }
+  </style>
+</head>
+<body>
+  <h1>Shadowlynx ProX Frontend</h1>
+  <div id="chatbox"></div>
+  <input id="input" type="text" placeholder="Type your message...">
+  <button id="send">Send</button>
+
+  <script>
+    const chatbox = document.getElementById('chatbox');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+
+    function addMessage(text, cls) {
+      const div = document.createElement('div');
+      div.className = cls;
+      div.textContent = text;
+      chatbox.appendChild(div);
+      chatbox.scrollTop = chatbox.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const msg = input.value.trim();
+      if (!msg) return;
+      addMessage("You: " + msg, "user");
+      input.value = "";
+
+      try {
+        const res = await fetch("https://shadowlynxprox-1.onrender.com/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: msg })
+        });
+        const data = await res.json();
+        addMessage("Bot: " + (data.reply || JSON.stringify(data)), "bot");
+      } catch (err) {
+        addMessage("Error: " + err.message, "bot");
+      }
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+    input.addEventListener("keypress", e => {
+      if (e.key === "Enter") sendMessage();
+    });
+  </script>
+</body>
+</html>
