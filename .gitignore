@@ -1,0 +1,57 @@
+# --- Binaries ---
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# --- Go ---
+cli/vendor/
+
+# --- Rust ---
+orchestrator/target/
+
+# --- Python ---
+ai-core/.venv/
+ai-core/__pycache__/
+ai-core/src/__pycache__/
+ai-core/*.egg-info/
+*.pyc
+*.pyo
+
+# --- Plugins (compiled) ---
+plugins/**/target/
+plugins/**/*.wasm
+
+# --- Data ---
+data/sqlite/*.db
+data/sqlite/*.db-journal
+data/sqlite/*.db-wal
+data/redis/dump.rdb
+data/redis/appendonly.aof
+data/chromadb/
+data/vault/
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Environment ---
+.env
+.env.local
+*.env.local
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- Secrets ---
+*.pem
+*.key
+!security/certs/*.example.*

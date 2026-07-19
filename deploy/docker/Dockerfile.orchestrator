@@ -1,0 +1,34 @@
+# Build stage
+FROM rust:1.80-slim-bookworm AS builder
+
+RUN apt-get update && apt-get install -y protobuf-compiler pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Copy proto files first
+COPY ../proto /build/proto
+
+# Copy Cargo files for dependency caching
+COPY orchestrator/Cargo.toml orchestrator/Cargo.lock orchestrator/build.rs ./
+
+# Create dummy source to build dependencies
+RUN mkdir src && echo "fn main() {}" > src/main.rs && echo "" > src/service.rs
+RUN cargo build --release || true
+RUN rm -rf src
+
+# Copy actual source
+COPY orchestrator/src ./src
+
+# Build with timestamp override for reproducibility
+RUN cargo build --release
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/target/release/orchestrator /usr/local/bin/orchestrator
+
+EXPOSE 50052
+
+ENTRYPOINT ["/usr/local/bin/orchestrator"]

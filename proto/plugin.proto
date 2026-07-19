@@ -1,0 +1,183 @@
+syntax = "proto3";
+
+package plugin;
+
+// ============================================================
+// Shadowlynx ProX — Plugin System Protocol
+// ============================================================
+// Defines how plugins are discovered, loaded, executed,
+// and how the AI Core interacts with plugin-provided tools.
+// ============================================================
+
+// ----------------------------------------------------------
+// Enums
+// ----------------------------------------------------------
+
+enum PluginState {
+    PLUGIN_STATE_UNKNOWN = 0;
+    PLUGIN_STATE_LOADED = 1;
+    PLUGIN_STATE_RUNNING = 2;
+    PLUGIN_STATE_ERROR = 3;
+    PLUGIN_STATE_STOPPED = 4;
+}
+
+enum CapabilityLevel {
+    CAPABILITY_NONE = 0;
+    CAPABILITY_READ_ONLY = 1;
+    CAPABILITY_READ_WRITE = 2;
+    CAPABILITY_FULL = 3;
+}
+
+// ----------------------------------------------------------
+// Core Types
+// ----------------------------------------------------------
+
+// A single capability a plugin requests
+message Capability {
+    string name = 1;                // e.g. "network:outbound", "fs:read", "exec:shell"
+    CapabilityLevel level = 2;
+    string scope = 3;               // e.g. "/tmp/*", "0.0.0.0/0:443"
+    string reason = 4;              // Why the plugin needs this
+}
+
+// Plugin manifest — bundled inside the WASM binary or alongside it
+message PluginManifest {
+    string id = 1;                  // Unique plugin ID, e.g. "offensive-security"
+    string name = 2;                // Human-readable name
+    string version = 3;             // Semver
+    string description = 4;
+    string author = 5;
+    repeated Capability capabilities = 6;
+    string wasm_hash = 7;           // SHA-256 of the WASM binary for integrity
+    int32 fuel_budget = 8;          // Max instructions (millions), 0 = unlimited
+    int32 timeout_ms = 9;           // Max execution time
+    int32 memory_mb = 10;           // Max WASM memory
+}
+
+// A tool exposed by a plugin — these get registered in the AI Tool Registry
+message PluginTool {
+    string name = 1;                // Unique tool name
+    string description = 2;         // What it does (for the LLM)
+    string json_schema = 3;         // JSON Schema for parameters
+    string plugin_id = 4;           // Which plugin provides this tool
+}
+
+// Result of a tool execution
+message ToolResult {
+    bool success = 1;
+    string output = 2;              // JSON string — the actual result
+    string error = 3;               // Error message if failed
+    int64 duration_ms = 4;
+    int64 fuel_consumed = 5;
+}
+
+// ----------------------------------------------------------
+// RPCs
+// ----------------------------------------------------------
+
+// Request: Load a plugin from a file path or bytes
+message LoadPluginRequest {
+    oneof source {
+        string file_path = 1;       // Path to .wasm file on disk
+        bytes wasm_bytes = 2;       // Raw WASM bytes
+    }
+    PluginManifest manifest = 3;    // Required — validated before loading
+}
+
+message LoadPluginResponse {
+    bool success = 1;
+    string plugin_id = 2;
+    string error = 3;
+}
+
+// Request: Execute a tool provided by a loaded plugin
+message ExecuteToolRequest {
+    string plugin_id = 1;
+    string tool_name = 2;
+    string arguments_json = 3;      // JSON string of tool arguments
+}
+
+message ExecuteToolResponse {
+    ToolResult result = 1;
+}
+
+// List loaded plugins and their tools
+message ListPluginsRequest {}
+
+message PluginInfo {
+    string plugin_id = 1;
+    PluginManifest manifest = 2;
+    PluginState state = 3;
+    repeated PluginTool tools = 4;
+}
+
+message ListPluginsResponse {
+    repeated PluginInfo plugins = 1;
+}
+
+// Get a specific plugin's info
+message GetPluginRequest {
+    string plugin_id = 1;
+}
+
+message GetPluginResponse {
+    PluginInfo plugin = 1;
+    bool found = 2;
+}
+
+// Unload/stop a plugin
+message UnloadPluginRequest {
+    string plugin_id = 1;
+}
+
+message UnloadPluginResponse {
+    bool success = 1;
+    string error = 2;
+}
+
+// Check if a WASM binary is valid and what tools it exports
+message ValidatePluginRequest {
+    bytes wasm_bytes = 1;
+}
+
+message ValidatePluginResponse {
+    bool valid = 1;
+    string error = 2;
+    repeated PluginTool tools = 3;
+    PluginManifest manifest = 4;    // Extracted from the WASM custom section
+}
+
+// ----------------------------------------------------------
+// Service
+// ----------------------------------------------------------
+
+service PluginService {
+    // Load a plugin into the runtime
+    rpc LoadPlugin(LoadPluginRequest) returns (LoadPluginResponse);
+
+    // Execute a tool provided by a loaded plugin
+    rpc ExecuteTool(ExecuteToolRequest) returns (ExecuteToolResponse);
+
+    // List all loaded plugins
+    rpc ListPlugins(ListPluginsRequest) returns (ListPluginsResponse);
+
+    // Get info about a specific plugin
+    rpc GetPlugin(GetPluginRequest) returns (GetPluginResponse);
+
+    // Unload a plugin
+    rpc UnloadPlugin(UnloadPluginRequest) returns (UnloadPluginResponse);
+
+    // Validate a WASM binary without loading it
+    rpc ValidatePlugin(ValidatePluginRequest) returns (ValidatePluginResponse);
+
+    // Stream plugin events (load, unload, error, tool execution)
+    rpc WatchPlugins(ListPluginsRequest) returns (stream PluginEvent);
+}
+
+// Event emitted during plugin lifecycle
+message PluginEvent {
+    string plugin_id = 1;
+    string event_type = 2;          // "loaded", "unloaded", "error", "tool_start", "tool_end"
+    string message = 3;
+    int64 timestamp_ms = 4;
+}

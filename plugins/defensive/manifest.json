@@ -1,0 +1,17 @@
+{
+    "id": "defensive-security",
+    "name": "Defensive Security Toolkit",
+    "version": "1.0.0",
+    "description": "Log analysis, secret scanning, hash identification, CVE lookup, security baseline checks",
+    "author": "Shadowlynx ProX",
+    "capabilities": [
+        {"name": "network:outbound", "level": "read_only", "scope": "https://services.nvd.nist.gov:443", "reason": "CVE lookup queries NVD API"},
+        {"name": "fs:read", "level": "read_only", "scope": "/tmp/*:/var/log/*", "reason": "Read log files and target paths for analysis"},
+        {"name": "fs:write", "level": "none", "scope": "", "reason": ""},
+        {"name": "exec:shell", "level": "none", "scope": "", "reason": ""}
+    ],
+    "fuel_budget": 200000000,
+    "timeout_ms": 120000,
+    "memory_mb": 128
+}
+

@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package ai_core;
+
+// ================================================================
+// AI Core Service — interface between Rust orchestrator and Python AI
+// ================================================================
+
+service AICore {
+    // Streaming chat completion
+    rpc ChatCompletion (ChatCompletionRequest) returns (stream ChatCompletionResponse);
+
+    // Non-streaming completion
+    rpc Completion (CompletionRequest) returns (CompletionResponse);
+
+    // Provider information
+    rpc GetProviders (GetProvidersRequest) returns (GetProvidersResponse);
+
+    // Health check
+    rpc Health (HealthRequest) returns (HealthResponse);
+}
+
+message ChatCompletionRequest {
+    repeated ChatMessage messages = 1;
+    string system_prompt = 2;
+    string model = 3;
+    string provider = 4;
+    int32 max_tokens = 5;
+    float temperature = 6;
+    string conversation_id = 7;
+}
+
+message ChatMessage {
+    string role = 1;
+    string content = 2;
+}
+
+message ChatCompletionResponse {
+    string text_chunk = 1;
+    bool is_final = 2;
+    int32 input_tokens = 3;
+    int32 output_tokens = 4;
+    string model = 5;
+    string provider = 6;
+    string error = 7;
+}
+
+message CompletionRequest {
+    repeated ChatMessage messages = 1;
+    string system_prompt = 2;
+    string model = 3;
+    string provider = 4;
+    int32 max_tokens = 5;
+    float temperature = 6;
+}
+
+message CompletionResponse {
+    string content = 1;
+    string model = 2;
+    string provider = 3;
+    int32 input_tokens = 4;
+    int32 output_tokens = 5;
+    string error = 6;
+}
+
+message GetProvidersRequest {}
+
+message GetProvidersResponse {
+    repeated ProviderInfo providers = 1;
+    bool any_available = 2;
+}
+
+message ProviderInfo {
+    string name = 1;
+    bool available = 2;
+    string default_model = 3;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+    bool healthy = 1;
+    string status = 2;
+    repeated ProviderInfo providers = 3;
+}
