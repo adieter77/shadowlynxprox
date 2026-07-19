@@ -1,0 +1,20 @@
+name: Deploy Frontend to GitHub Pages
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # If you have a build step (npm run build), add it here.
+      # For plain HTML, just publish the root folder.
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .   # or ./frontend if your index.html is inside a folder
