@@ -5,9 +5,8 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app, origins=["https://adieter77.github.io"])
 
-# Use your ngrok endpoint here
-JANAI_URL = "https://ether-rimless-cabbage.ngrok-free.dev/completion"
-# ⚠️ If Jan.ai uses a different path (like /chat or /generate), replace "/completion" accordingly.
+# Replace with the correct Jan.ai endpoint you confirmed above
+JANAI_URL = "https://ether-rimless-cabbage.ngrok-free.dev/<correct-endpoint>"
 
 @app.route("/chat", methods=["POST"])
 def chat():
