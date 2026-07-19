@@ -7,12 +7,18 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # allow pushing to gh-pages
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # If you have a build step (like npm run build), add it here.
+      # For plain HTML, skip directly to deploy.
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .   # change to ./frontend if your index.html is inside a folder
+          publish_dir: .        # use "." if index.html is in root
           publish_branch: gh-pages
