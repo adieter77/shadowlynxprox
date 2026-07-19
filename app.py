@@ -1,28 +1,24 @@
-import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import openai
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
 
 app = Flask(__name__)
-CORS(app, origins=["https://adieter77.github.io"])  # allow GitHub Pages frontend
+CORS(app, origins=["https://adieter77.github.io"])
 
-# Load your OpenAI API key from environment variable
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Load your local model (change to "Qwen/Qwen2-7B" or "meta-llama/Llama-2-7b-chat-hf" if installed)
+MODEL_NAME = "Qwen/Qwen2-7B"   # adjust to your installed model
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, torch_dtype=torch.float16, device_map="auto")
 
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.json
     user_msg = data.get("message", "")
 
-    try:
-        # Call AI model for intelligent reply
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": user_msg}]
-        )
-        ai_reply = response.choices[0].message["content"]
-    except Exception as e:
-        ai_reply = f"Error generating AI reply: {str(e)}"
+    inputs = tokenizer(user_msg, return_tensors="pt").to(model.device)
+    outputs = model.generate(**inputs, max_length=200)
+    ai_reply = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
     return jsonify({"reply": ai_reply})
 
